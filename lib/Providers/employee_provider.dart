@@ -37,7 +37,6 @@ class EmployeeProvider with ChangeNotifier {
     _setLoading(true);
     var box = Hive.box('employeesBox');
 
-    // Attempt to read cached employees
     List<Employee>? cachedEmployees = box.get('employees')?.cast<Employee>();
     DateTime? lastFetchTime = box.get('lastFetchTime');
 
@@ -77,31 +76,11 @@ class EmployeeProvider with ChangeNotifier {
     _setLoading(true);
     var box = Hive.box('employeesBox');
 
-    try {
-      final response = await http.post(
-        Uri.parse('$baseUrl/create'),
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode(employee.toJson()),
-      );
-
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        if (data['status'] == 'success') {
-          await fetchEmployees();
-          _setLoading(false);
-          return true;
-        } else {
-          box.add(employee.toJson());
-        }
-      } else {
-        box.add(employee.toJson());
-      }
-    } catch (_) {
-      box.add(employee.toJson());
-    }
-
+    List<Employee> employees = box.get('employees')?.cast<Employee>() ?? [];
+    employees.add(employee);
+    box.put('employees', employees);
     _setLoading(false);
-    return false;
+    return true;
   }
 
   Future<bool> submitEmployeeForm(String name, String age, String salary) async {
@@ -136,60 +115,39 @@ class EmployeeProvider with ChangeNotifier {
 
   Future<bool> updateEmployee(Employee employee) async {
     _setLoading(true);
-    try {
-      final response = await http.put(
-        Uri.parse('$baseUrl/update/${employee.id}'),
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode(employee.toJson()),
-      );
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        if (data['status'] == 'success') {
-          int index = _employees.indexWhere((emp) => emp.id == employee.id);
-          if (index != -1) {
-            _employees[index] = employee;
-            notifyListeners();
-          }
-          _setLoading(false);
-          return true;
-        } else {
-          _setErrorMessage('Internal error. Please try again later.');
-        }
-      } else {
-        _setErrorMessage('Internal error. Please try again later.');
-      }
-    } catch (_) {
-      _setErrorMessage('Internal error. Please try again later.');
+    var box = Hive.box('employeesBox');
+    print("Hello");
+    List<Employee> employees = box.get('employees')?.cast<Employee>() ?? [];
+    int index = employees.indexWhere((emp) => emp.id == employee.id);
+    if (index != -1) {
+      employees[index] = employee;
+      box.put('employees', employees);
+      print("Saved to local");
+      _setLoading(false);
+      return true;
+    } else {
+      _setErrorMessage("Employee not found in the local cache.");
+      _setLoading(false);
+      return false;
     }
-    _setLoading(false);
-    return false;
   }
 
   Future<bool> deleteEmployee(int employeeId) async {
     _setLoading(true);
-    try {
-      final response = await http.delete(
-        Uri.parse('$baseUrl/delete/$employeeId'),
-      );
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        if (data['status'] == 'success') {
-          _employees.removeWhere((emp) => emp.id == employeeId);
-          notifyListeners();
-          _setLoading(false);
-          return true;
-        } else {
-          _setErrorMessage('Internal error. Please try again later.');
-        }
-      } else {
-        _setErrorMessage('Internal error. Please try again later.');
-      }
-    } catch (_) {
-      _setErrorMessage('Internal error. Please try again later.');
-    }
-    _setLoading(false);
-    return false;
-  }
+    var box = Hive.box('employeesBox');
 
+    List<Employee> employees = box.get('employees')?.cast<Employee>() ?? [];
+    int index = employees.indexWhere((emp) => emp.id == employeeId);
+    if (index != -1) {
+      employees.removeAt(index);
+      box.put('employees', employees);
+      _setLoading(false);
+      return true;
+    } else {
+      _setErrorMessage("Employee not found in the local cache.");
+      _setLoading(false);
+      return false;
+    }
+  }
 
 }
